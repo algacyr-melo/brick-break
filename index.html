@@ -19,6 +19,20 @@
         // keep track of paddle position
         let paddleX;
 
+        // define brick wall dimensions
+        const BRICK_W = 80;
+        const BRICK_H = 20;
+        const BRICK_GAP = 2;
+        const BRICK_COLS = 10;
+        const BRICK_ROWS = 14;
+
+        const brickGrid = new Array(BRICK_W * BRICK_H);
+
+        const BALL_RADIUS = 10;
+
+        // let some space from bottom edge to the paddle
+        const PADDLE_Y = 540;
+
         const PADDLE_WIDTH = 100;
         const PADDLE_THICKNESS = 10;
 
@@ -36,9 +50,63 @@
                 const mousePos = calculateMousePos(evt);
                 paddleX = mousePos.x - PADDLE_WIDTH/2;
             });
+
+            resetBricks();
+            ballReset();
+        }
+
+        function brickTileToIndex(tileCol, tileRow) {
+            return (tileCol + BRICK_COLS * tileRow);
+        }
+
+        function checkForAndRemoveBrickAtPixelCoord(pixelX, pixelY) {
+            // get the tile column and row that ball is currently over
+            const tileCol = Math.floor(pixelX / BRICK_W);
+            const tileRow = Math.floor(pixelY / BRICK_H);
+
+            // check if its out of the brick wall bounds
+            if (tileCol < 0 || tileCol >= BRICK_COLS ||
+                tileRow < 0 || tileRow >= BRICK_ROWS) {
+                return ;
+            }
+
+            const tileIndex = brickTileToIndex(tileCol, tileRow);
+            if (brickGrid[tileIndex] == 1) { // if there is a brick
+                brickGrid[tileIndex] = 0; // remove brick 
+                return true;
+            }
+            return false; // there is no brick to remove here
+        }
+
+        function resetBricks() {
+            // reset the brickGrid state so it gets completely filled
+            for (let i = 0; i < BRICK_W * BRICK_H; i++) {
+                brickGrid[i] = 1;
+            }
+        }
+
+        function isBrickAtTileCoord(brickTileCol, brickTileRow) {
+            const brickIndex = brickTileToIndex(brickTileCol, brickTileRow);
+
+            return (brickGrid[brickIndex] == 1);
+        }
+
+        function drawBricks() {
+            for (let col = 0; col < BRICK_COLS; col++) {
+                for (let row = 0; row < BRICK_ROWS; row++) {
+                    if (isBrickAtTileCoord(col, row)) { // check the brick grid state
+                        const brickTopLeftX = BRICK_W * col;
+                        const brickTopLeftY = BRICK_H * row;
+
+                        colorRect(brickTopLeftX, brickTopLeftY,
+                            BRICK_W - BRICK_GAP, BRICK_H - BRICK_GAP, 'blue');
+                    }
+                }
+            }
         }
 
         function ballReset() {
+            // center the ball on screen
             ballX = canvas.width/2;
             ballY = canvas.height/2;
         }
@@ -65,20 +133,27 @@
                 ballSpeedX *= -1; // reverse ball's horizontal direction
             }
 
-            if (ballY > canvas.height) { // if ball has moved beyond the BOTTOM edge
-                if (ballX >= paddleX && ballX <= paddleX + PADDLE_WIDTH) { // if ball hits the paddle
-                    ballSpeedY *= -1; // reverse ball's vertical direction
+            if (ballY < 0) { // if ball has moved beyond the TOP edge
+                ballSpeedY *= -1; // reverse ball's vertical direction
+            }
 
-                    // change ball's horizontal direction based on the paddle hit spot
-                    const deltaX = ballX-(paddleX+PADDLE_WIDTH/2);
-                    ballSpeedX = deltaX * 0.35;
-                }
-                else {
-                    ballReset();
+            if (ballSpeedY > 0) { // only bounce off paddle if the ball is moving downward
+                if (ballY + BALL_RADIUS >= PADDLE_Y && ballY <= PADDLE_Y + PADDLE_THICKNESS) { // vertically over
+                    if (ballX + BALL_RADIUS >= paddleX && ballX - BALL_RADIUS <= paddleX + PADDLE_WIDTH) { // horizontally too
+                        ballSpeedY *= -1; // reverse ball's vertical direction
+
+                        // change ball's horizontal direction based on the paddle hit spot
+                        const deltaX = ballX-(paddleX+PADDLE_WIDTH/2);
+                        ballSpeedX = deltaX * 0.35;
+                    }
                 }
             }
 
-            if (ballY < 0) { // if ball has moved beyond the TOP edge
+            if (ballY > canvas.height) { // if ball has moved beyond the BOTTOM edge
+                ballReset();
+            }
+
+            if (checkForAndRemoveBrickAtPixelCoord(ballX, ballY)) {
                 ballSpeedY *= -1; // reverse ball's vertical direction
             }
 
@@ -103,12 +178,15 @@
             colorRect(0, 0, canvas.width, canvas.height, 'black');
 
             // draw a white ball
-            colorCircle(ballX, ballY, 10, 'white');
+            colorCircle(ballX, ballY, BALL_RADIUS, 'white');
+
+            drawBricks();
 
             // draw the paddle
-            colorRect(paddleX, canvas.height - PADDLE_THICKNESS, PADDLE_WIDTH,
-                PADDLE_THICKNESS, 'white');
+            colorRect(paddleX, PADDLE_Y, PADDLE_WIDTH, PADDLE_THICKNESS, 'white');
+
         }
+
     </script>
 </body>
 </html>
