@@ -6,187 +6,232 @@
     <meta content="utf-8" http-equiv="enconding">
 </head>
 <body>
-    <canvas id="gameCanvas" width="800" height="600"></canvas>
-    <script>
-        // save canvas and its context for drawing to it
-        let canvas, canvasContext;
+<canvas id="gameCanvas" width="800" height="600"></canvas>
 
-        let ballSpeedX = 6, ballSpeedY = 8;
+<script>
+    // variables to keep track of ball position
+    let ballX = 75, ballY = 75;
+    let ballSpeedX = 6, ballSpeedY = 8;
 
-        // keep track of ball position
-        let ballX = 75, ballY = 75;
+    // brick constants and variables
+    const BRICK_W = 80;
+    const BRICK_H = 20;
+    const BRICK_GAP = 2;
+    const BRICK_COLS = 10;
+    const BRICK_ROWS = 14;
 
-        // keep track of paddle position
-        let paddleX;
+    const brickGrid = new Array(BRICK_COLS * BRICK_ROWS);
+    let bricksLeft;
 
-        // define brick wall dimensions
-        const BRICK_W = 80;
-        const BRICK_H = 20;
-        const BRICK_GAP = 2;
-        const BRICK_COLS = 10;
-        const BRICK_ROWS = 14;
 
-        const brickGrid = new Array(BRICK_W * BRICK_H);
+    // paddle constants and variables
+    const PADDLE_Y = 540;
+    const PADDLE_WIDTH = 100;
+    const PADDLE_THICKNESS = 10;
+    let paddleX;
 
-        const BALL_RADIUS = 10;
+    const BALL_RADIUS = 10;
 
-        // let some space from bottom edge to the paddle
-        const PADDLE_Y = 540;
+    // save the canvas for dimensions, and its context for drawing to it
+    let canvas, canvasContext;
 
-        const PADDLE_WIDTH = 100;
-        const PADDLE_THICKNESS = 10;
+    window.onload = function () {
+        canvas = document.getElementById('gameCanvas');
+        canvasContext = canvas.getContext('2d');
 
-        window.onload = function () {
-            canvas = document.getElementById('gameCanvas');
-            canvasContext = canvas.getContext('2d');
+        const framesPerSecond = 30;
+        setInterval(function () {
+            moveEverything();
+            drawEverything();
+        }, 1000/framesPerSecond);
 
-            const framesPerSecond = 30;
-            setInterval(function () {
-                moveEverything();
-                drawEverything();
-            }, 1000/framesPerSecond);
+        canvas.addEventListener('mousemove', (evt) => {
+            const mousePos = calculateMousePos(evt);
+            paddleX = mousePos.x - PADDLE_WIDTH/2;
+        });
 
-            canvas.addEventListener('mousemove', (evt) => {
-                const mousePos = calculateMousePos(evt);
-                paddleX = mousePos.x - PADDLE_WIDTH/2;
-            });
+        resetBricks();
+        ballReset();
+    }
 
-            resetBricks();
+    function brickTileToIndex(tileCol, tileRow) {
+        return (tileCol + BRICK_COLS * tileRow);
+    }
+
+    function breakAndBounceOffBrickAtPixelCoord(pixelX, pixelY) {
+        // get the tile column and row that ball is currently over
+        const tileCol = Math.floor(pixelX / BRICK_W);
+        const tileRow = Math.floor(pixelY / BRICK_H);
+
+        // check whether te ball is within any part of the brick wall
+        if (tileCol < 0 || tileCol >= BRICK_COLS ||
+            tileRow < 0 || tileRow >= BRICK_ROWS) {
+            return ; // bail out of function to avoid illegal array position usage
+        }
+
+        const brickIndex = brickTileToIndex(tileCol, tileRow);
+
+        if (brickGrid[brickIndex] == 1) { // if there is a brick
+            const prevBallX = ballX - ballSpeedX;
+            const prevBallY = ballY - ballSpeedY;
+
+            const prevTileCol = Math.floor(prevBallX / BRICK_W);
+            const prevTileRow = Math.floor(prevBallY / BRICK_H);
+
+            let bothTestsFailed = true;
+
+            if (tileCol != prevTileCol) { // if ball has entered from the brick's side
+                const adjacentBrickIndex = brickTileToIndex(prevTileCol, tileRow);
+
+                // make sure the side we want to reflect off isn't blocked
+                if (brickGrid[adjacentBrickIndex] != 1) {
+                    ballSpeedX *= -1; // reverse ball's horizontal speed
+                    bothTestsFailed = false;
+                }
+            }
+
+            if (tileRow != prevTileRow) { // if ball has entered from the brick's top or bottom
+                const adjacentBrickIndex = brickTileToIndex(tileCol, prevTileRow);
+
+                // make sure the side we want to reflect off isn't blocked
+                if (brickGrid[adjacentBrickIndex] != 1) {
+                    ballSpeedY *= -1; // reverse ball's vertical speed
+                    bothTestsFailed = false;
+                }
+            }
+
+            // we hit an "armpit" on the inside corner, flip both to avoid going into it
+            if (bothTestsFailed) { 
+                ballSpeedX *= -1;
+                ballSpeedY *= -1;
+            }
+
+            brickGrid[brickIndex] = 0; // remove the brick that got hit
+            bricksLeft--; // book keep the amount of remaining bricks
+        }
+    }
+
+    function resetBricks() {
+        bricksLeft = 0;
+
+        for (let row = 0; row < BRICK_ROWS; row++) {
+            for (let col = 0; col < BRICK_COLS; col++) {
+                const brickIndex = brickTileToIndex(col, row);
+                if (row >= 3) { // only place bricks at or below margin line
+                    brickGrid[brickIndex] = 1;
+                    bricksLeft++;
+                } else { // placing 0's for margin along the top
+                    brickGrid[brickIndex] = 0;
+                }
+
+            }
+        }
+    }
+
+    function isBrickAtTileCoord(brickTileCol, brickTileRow) {
+        const brickIndex = brickTileToIndex(brickTileCol, brickTileRow);
+
+        return (brickGrid[brickIndex] == 1);
+    }
+
+    function drawBricks() {
+        for (let col = 0; col < BRICK_COLS; col++) {
+            for (let row = 0; row < BRICK_ROWS; row++) {
+                if (isBrickAtTileCoord(col, row)) { // check the brick grid state
+                    const brickTopLeftX = BRICK_W * col;
+                    const brickTopLeftY = BRICK_H * row;
+
+                    colorRect(brickTopLeftX, brickTopLeftY,
+                        BRICK_W - BRICK_GAP, BRICK_H - BRICK_GAP, 'blue');
+                }
+            }
+        }
+    }
+
+    function ballReset() {
+        // center the ball on screen
+        ballX = canvas.width/2;
+        ballY = canvas.height/2;
+    }
+
+    function calculateMousePos(evt) {
+        const rect = canvas.getBoundingClientRect();
+        const root = document.documentElement;
+
+        // get mouse position relative to the canvas
+        const mouseX = evt.clientX - rect.left - root.scrollLeft;
+        const mouseY = evt.clientY - rect.top - root.scrollTop;
+        return {
+            x: mouseX,
+            y: mouseY
+        }
+    }
+
+    function moveEverything() {
+        if (ballX > canvas.width) { // if ball has moved beyond the RIGHT edge
+            ballSpeedX *= -1; // reverse ball's horizontal direction
+        }
+
+        if (ballX < 0) { // if ball has moved beyond the LEFT edge
+            ballSpeedX *= -1; // reverse ball's horizontal direction
+        }
+
+        if (ballY < 0) { // if ball has moved beyond the TOP edge
+            ballSpeedY *= -1; // reverse ball's vertical direction
+        }
+
+        if (ballSpeedY > 0) { // only bounce off paddle if the ball is moving downward
+            if (ballY + BALL_RADIUS >= PADDLE_Y && ballY <= PADDLE_Y + PADDLE_THICKNESS) { // vertically over
+                if (ballX + BALL_RADIUS >= paddleX && ballX - BALL_RADIUS <= paddleX + PADDLE_WIDTH) { // horizontally too
+                    ballSpeedY *= -1; // reverse ball's vertical direction
+
+                    // change ball's horizontal direction based on the paddle hit spot
+                    const deltaX = ballX-(paddleX+PADDLE_WIDTH/2);
+                    ballSpeedX = deltaX * 0.35;
+
+                    if (bricksLeft <= 0) { // if there are no remaining bricks
+                        resetBricks(); // fill it again
+                    }
+                }
+            }
+        }
+
+        if (ballY > canvas.height) { // if ball has moved beyond the BOTTOM edge
             ballReset();
         }
 
-        function brickTileToIndex(tileCol, tileRow) {
-            return (tileCol + BRICK_COLS * tileRow);
-        }
+        breakAndBounceOffBrickAtPixelCoord(ballX, ballY);
 
-        function checkForAndRemoveBrickAtPixelCoord(pixelX, pixelY) {
-            // get the tile column and row that ball is currently over
-            const tileCol = Math.floor(pixelX / BRICK_W);
-            const tileRow = Math.floor(pixelY / BRICK_H);
+        ballX += ballSpeedX; // move the ball based on it's current horizontal speed
+        ballY += ballSpeedY; // move the ball based on it's current vertical speed
+    }
 
-            // check if its out of the brick wall bounds
-            if (tileCol < 0 || tileCol >= BRICK_COLS ||
-                tileRow < 0 || tileRow >= BRICK_ROWS) {
-                return ;
-            }
+    function colorCircle(centerX, centerY, radius, fillColor) {
+        canvasContext.fillStyle = fillColor;
+        canvasContext.beginPath();
+        canvasContext.arc(centerX, centerY, radius, 0, Math.PI*2, true);
+        canvasContext.fill();
+    }
 
-            const tileIndex = brickTileToIndex(tileCol, tileRow);
-            if (brickGrid[tileIndex] == 1) { // if there is a brick
-                brickGrid[tileIndex] = 0; // remove brick 
-                return true;
-            }
-            return false; // there is no brick to remove here
-        }
+    function colorRect(topLeftX, topLeftY, boxWidth, boxHeight, fillColor) {
+        canvasContext.fillStyle = fillColor;
+        canvasContext.fillRect(topLeftX, topLeftY, boxWidth, boxHeight);
+    }
 
-        function resetBricks() {
-            // reset the brickGrid state so it gets completely filled
-            for (let i = 0; i < BRICK_W * BRICK_H; i++) {
-                brickGrid[i] = 1;
-            }
-        }
+    function drawEverything() {
+        // clear the game view by filling it with black
+        colorRect(0, 0, canvas.width, canvas.height, 'black');
 
-        function isBrickAtTileCoord(brickTileCol, brickTileRow) {
-            const brickIndex = brickTileToIndex(brickTileCol, brickTileRow);
+        // draw a white ball
+        colorCircle(ballX, ballY, BALL_RADIUS, 'white');
 
-            return (brickGrid[brickIndex] == 1);
-        }
+        drawBricks();
 
-        function drawBricks() {
-            for (let col = 0; col < BRICK_COLS; col++) {
-                for (let row = 0; row < BRICK_ROWS; row++) {
-                    if (isBrickAtTileCoord(col, row)) { // check the brick grid state
-                        const brickTopLeftX = BRICK_W * col;
-                        const brickTopLeftY = BRICK_H * row;
+        // draw the paddle
+        colorRect(paddleX, PADDLE_Y, PADDLE_WIDTH, PADDLE_THICKNESS, 'white');
 
-                        colorRect(brickTopLeftX, brickTopLeftY,
-                            BRICK_W - BRICK_GAP, BRICK_H - BRICK_GAP, 'blue');
-                    }
-                }
-            }
-        }
+    }
+</script>
 
-        function ballReset() {
-            // center the ball on screen
-            ballX = canvas.width/2;
-            ballY = canvas.height/2;
-        }
-
-        function calculateMousePos(evt) {
-            const rect = canvas.getBoundingClientRect();
-            const root = document.documentElement;
-
-            // get mouse position relative to the canvas
-            const mouseX = evt.clientX - rect.left - root.scrollLeft;
-            const mouseY = evt.clientY - rect.top - root.scrollTop;
-            return {
-                x: mouseX,
-                y: mouseY
-            }
-        }
-
-        function moveEverything() {
-            if (ballX > canvas.width) { // if ball has moved beyond the RIGHT edge
-                ballSpeedX *= -1; // reverse ball's horizontal direction
-            }
-
-            if (ballX < 0) { // if ball has moved beyond the LEFT edge
-                ballSpeedX *= -1; // reverse ball's horizontal direction
-            }
-
-            if (ballY < 0) { // if ball has moved beyond the TOP edge
-                ballSpeedY *= -1; // reverse ball's vertical direction
-            }
-
-            if (ballSpeedY > 0) { // only bounce off paddle if the ball is moving downward
-                if (ballY + BALL_RADIUS >= PADDLE_Y && ballY <= PADDLE_Y + PADDLE_THICKNESS) { // vertically over
-                    if (ballX + BALL_RADIUS >= paddleX && ballX - BALL_RADIUS <= paddleX + PADDLE_WIDTH) { // horizontally too
-                        ballSpeedY *= -1; // reverse ball's vertical direction
-
-                        // change ball's horizontal direction based on the paddle hit spot
-                        const deltaX = ballX-(paddleX+PADDLE_WIDTH/2);
-                        ballSpeedX = deltaX * 0.35;
-                    }
-                }
-            }
-
-            if (ballY > canvas.height) { // if ball has moved beyond the BOTTOM edge
-                ballReset();
-            }
-
-            if (checkForAndRemoveBrickAtPixelCoord(ballX, ballY)) {
-                ballSpeedY *= -1; // reverse ball's vertical direction
-            }
-
-            ballX += ballSpeedX; // move the ball based on it's current horizontal speed
-            ballY += ballSpeedY; // move the ball based on it's current vertical speed
-        }
-
-        function colorCircle(centerX, centerY, radius, fillColor) {
-            canvasContext.fillStyle = fillColor;
-            canvasContext.beginPath();
-            canvasContext.arc(centerX, centerY, radius, 0, Math.PI*2, true);
-            canvasContext.fill();
-        }
-
-        function colorRect(topLeftX, topLeftY, boxWidth, boxHeight, fillColor) {
-            canvasContext.fillStyle = fillColor;
-            canvasContext.fillRect(topLeftX, topLeftY, boxWidth, boxHeight);
-        }
-
-        function drawEverything() {
-            // clear the game view by filling it with black
-            colorRect(0, 0, canvas.width, canvas.height, 'black');
-
-            // draw a white ball
-            colorCircle(ballX, ballY, BALL_RADIUS, 'white');
-
-            drawBricks();
-
-            // draw the paddle
-            colorRect(paddleX, PADDLE_Y, PADDLE_WIDTH, PADDLE_THICKNESS, 'white');
-
-        }
-
-    </script>
 </body>
 </html>
