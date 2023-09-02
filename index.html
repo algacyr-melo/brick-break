@@ -4,6 +4,11 @@
 <head>
     <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
     <meta content="utf-8" http-equiv="enconding">
+
+    <!--prevent cache -->
+    <meta http-equiv='expires' content='0'>
+    <meta http-equiv='pragma' content='no-cache'>
+    <meta http-equiv='cache-control' content='no-cache'>
 </head>
 <body>
 <canvas id="gameCanvas" width="800" height="600"></canvas>
@@ -23,14 +28,11 @@
     const brickGrid = new Array(BRICK_COLS * BRICK_ROWS);
     let bricksLeft;
 
-
     // paddle constants and variables
     const PADDLE_Y = 540;
     const PADDLE_WIDTH = 100;
     const PADDLE_THICKNESS = 10;
     let paddleX;
-
-    const BALL_RADIUS = 10;
 
     // save the canvas for dimensions, and its context for drawing to it
     let canvas, canvasContext;
@@ -181,8 +183,8 @@
         }
 
         if (ballSpeedY > 0) { // only bounce off paddle if the ball is moving downward
-            if (ballY + BALL_RADIUS >= PADDLE_Y && ballY <= PADDLE_Y + PADDLE_THICKNESS) { // vertically over
-                if (ballX + BALL_RADIUS >= paddleX && ballX - BALL_RADIUS <= paddleX + PADDLE_WIDTH) { // horizontally too
+            if (ballY >= PADDLE_Y && ballY <= PADDLE_Y + PADDLE_THICKNESS) { // vertically over
+                if (ballX >= paddleX && ballX <= paddleX + PADDLE_WIDTH) { // horizontally too
                     ballSpeedY *= -1; // reverse ball's vertical direction
 
                     // change ball's horizontal direction based on the paddle hit spot
@@ -223,7 +225,7 @@
         colorRect(0, 0, canvas.width, canvas.height, 'black');
 
         // draw a white ball
-        colorCircle(ballX, ballY, BALL_RADIUS, 'white');
+        colorCircle(ballX, ballY, 10, 'white');
 
         drawBricks();
 
